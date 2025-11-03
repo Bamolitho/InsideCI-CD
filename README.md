@@ -309,9 +309,13 @@ Tu devrais voir :
 ### **Fait :**
 
 ✅ Le concept CI/CD et son intérêt
+
 ✅ Le pipeline logique d’un projet moderne
+
 ✅ Git et GitHub en pratique
+
 ✅ La création et le déploiement manuel sur render d’un microservice Flask
+
 ✅ Les bases de Docker pour la suite
 
 
