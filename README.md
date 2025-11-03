@@ -95,7 +95,7 @@ On va passer au **projet pratique** : ton premier microservice Python avec Flask
 #### **Objectif**
 
 Créer une API Flask minimaliste et la déployer manuellement.
-Tu comprendras le flux : **Git → commit → push → déploiement manuel.**
+Tu comprendras le flux : **Git → add → commit → push → déploiement manuel.**
 
 ------
 
