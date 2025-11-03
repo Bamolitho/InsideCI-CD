@@ -172,6 +172,12 @@ Teste localement :
 gunicorn app.app:app
 ```
 
+ou 
+
+```bash
+python app/app.py
+```
+
 Dans ton navigateur :
  👉 http://localhost:5801/hello
 
@@ -220,8 +226,14 @@ Exemple avec **Render** :
 
 - Commande de démarrage :
 
-  ```
+  ```less
   gunicorn app.app:app
+  ```
+
+  ou  
+
+  ```less
+  python app/app.py
   ```
 
 - Port : `5801`
