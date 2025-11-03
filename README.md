@@ -258,7 +258,11 @@ Tu devrais voir :
 
 ### **Étape 6 : Visualise ton premier pipeline (mentalement)**
 
-Tu as fait : **Code →** **Test local** → **Add** → **Commit →** **Push →** **Déploiement (manuel)** → **Accéder au service**
+Tu as fait : 
+
+```less
+Code → Test local → Add → Commit → Push → Déploiement (manuel)→ Accéder au service
+```
 
 Tu as donc déjà **le squelette du pipeline**.
 
