@@ -65,7 +65,7 @@ Ici, plus besoin de cliquer sur quoi que ce soit :
 Voici une représentation du pipeline CI/CD :
 
 ```basic
-Développeur → Git push
+Développeur → git add . → git commit -m "Un message" → git push
     ↓
 [Pipeline CI]
     - Build du code
