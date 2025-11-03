@@ -141,17 +141,13 @@ venv\Scripts\activate      # Windows
 Installe Flask :
 
 ```bash
-pip install --upgrade pip && pip install flask
+pip install --upgrade pip && pip install flask gunicorn
 pip freeze > requirements.txt
 ```
 
 ------
 
-Ajoutez **gunicorn** dans requirements.txt
 
-```bash
-echo "gunicorn" >> requirements.txt
-```
 
 ### **Étape 3 : Créer ton microservice**
 
