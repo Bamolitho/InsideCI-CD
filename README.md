@@ -604,17 +604,30 @@ Une assistante IA commente le fichier ci-dessus : [Explications pipeline](./expl
 - **Sur chaque push** : pour vérifier ton code en continu.
 - **Sur chaque pull request** : avant d’intégrer une branche dans `main`.
 
-*(Tu peux ajuster la section `on:` dans le YAML selon ton workflow.)*
+Voici ce qui se passe concrètement : 
+
+```mermaid
+graph LR
+    A[📝 Commit & Push] --> B[🚀 GitHub Actions démarre]
+    B --> C[📥 Clone le repo]
+    C --> D[🐍 Installe Python 3.12]
+    D --> E[📦 Installe dépendances]
+    E --> F[✅ Tests pytest]
+    F --> G[🔍 Linting flake8]
+    G --> H[🎨 Format black]
+    H --> I{Tout OK ?}
+    I -->|✅ Oui| J[✨ Commit validé]
+    I -->|❌ Non| K[⛔ Commit rejeté]
+```
 
 ------
 
 ### **Étape 6 : Gérer les secrets dans GitHub Actions**
 
-Si ton pipeline nécessite des variables sensibles (API_KEY, TOKEN, etc.),
- ne les mets **jamais dans ton code**.
+Si ton pipeline nécessite des variables sensibles (API_KEY, TOKEN, etc.), ne les mets **jamais dans ton code**.
 
 Dans ton repo GitHub :
- **Settings → Secrets and variables → Actions → New repository secret**
+**Settings → Secrets and variables → Actions → New repository secret**
 
 Puis tu y ajoutes, par exemple :
 
@@ -634,7 +647,7 @@ env:
 ### **Étape 7 : Pourquoi isoler les environnements avec Docker ?**
 
 GitHub Actions te donne des runners “propres” à chaque exécution.
- Mais dans un contexte pro :
+Mais dans un contexte pro :
 
 - Tu veux t’assurer que ton code tourne **dans le même environnement partout**.
 - Docker garantit la **portabilité** : le même container local = le même container dans la CI.
@@ -643,7 +656,7 @@ Exemple :
 
 ```yaml
 container:
-  image: python:3.10-slim
+  image: python:3.12-slim
 ```
 
 → Tous tes tests s’exécuteront dans un environnement Docker isolé.
