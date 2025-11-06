@@ -23,7 +23,7 @@ run:
 # Pousser sur github
 github:
 	git add .
-	git commit -m "https://github.com/Bamolitho/hello-ci-cd"
+	git commit -m "Démo ici --> https://github.com/Bamolitho/hello-ci-cd"
 	git push
 
 # Pousser avec message personnalisé
