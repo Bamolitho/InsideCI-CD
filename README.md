@@ -1,5 +1,7 @@
 # **PHASE 1 — LES FONDATIONS DU CI/CD** [[1]](#ref1)
 
+*Note* : démo ici --> https://github.com/Bamolitho/hello-ci-cd
+
 ## **Comprendre et visualiser le concept**
 
 ------
