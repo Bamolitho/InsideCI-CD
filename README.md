@@ -512,7 +512,9 @@ black
 ```
 
 ✅ `requirements.txt` = prod
+
 ✅ `requirements-dev.txt` = dev & CI
+
 ✅ `pytest`, `flake8`, `black` seulement côté dev
 
 
@@ -581,10 +583,10 @@ Une assistante IA commente le fichier ci-dessus : [Explications pipeline](./expl
    black --check app tests
    ```
 
-2. Si tout passe, committe le fichier :
+2. Si tout passe, committe :
 
    ```bash
-   git add .github/workflows/ci.yml
+   git add .
    git commit -m "Add CI pipeline with pytest, black and flake8"
    git push
    ```
