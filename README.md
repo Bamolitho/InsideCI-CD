@@ -685,7 +685,171 @@ container:
 
 
 
-**Status badge** : ![CI](https://github.com/Bamolitho/hello-ci-cd/workflows/CI%20-%20Hello%20CI%2FCD/badge.svg)
+# **Phase 3 — Continuous Delivery**
+
+------
+
+### **1. Concepts à bien saisir**
+
+#### **Différence entre Delivery et Deployment**
+
+- **Continuous Delivery** : ton application est *toujours prête à être déployée*.
+   → Le pipeline s’arrête juste avant la mise en production.
+   → Tu génères, testes, et publies des artefacts (images Docker, .jar, etc.) utilisables immédiatement.
+- **Continuous Deployment** : tu *déploies automatiquement* dès qu’un commit est validé.
+   → Pas d’intervention humaine, la mise en production est automatique.
+
+En résumé :
+
+| Étape       | Continuous Delivery  | Continuous Deployment |
+| ----------- | -------------------- | --------------------- |
+| Tests       | Automatisés          | Automatisés           |
+| Build       | Automatisé           | Automatisé            |
+| Déploiement | Manuel (approbation) | Automatique           |
+| Risque      | Contrôlé             | Plus élevé            |
+
+------
+
+#### **Gestion des artefacts**
+
+Un *artefact* = le produit fini du build, prêt à être déployé.
+**Exemples** :
+
+- `.jar` → Java
+- `.whl` → Python
+- `image Docker` → apps conteneurisées
+
+Les artefacts sont souvent stockés dans un **registre** (ex. : DockerHub, GitHub Container Registry, Nexus, Artifactory).
+
+------
+
+#### **Stratégies de déploiement progressif**
+
+Ces stratégies limitent les risques lors d’un déploiement :
+
+- **Staging** : environnement de pré-production pour tester avant la prod.
+- **Canary Release** : on déploie une nouvelle version à un petit pourcentage d’utilisateurs d’abord.
+- **Blue-Green** : deux environnements (blue = prod, green = nouvelle version). On bascule le trafic une fois les tests OK.
+
+------
+
+### **2. Outils à maîtriser**
+
+- **DockerHub** : pour stocker et partager tes images Docker publiques ou privées.
+- **GitHub Container Registry (GHCR)** : alternative intégrée à GitHub.
+- **Docker Compose** : permet d’orchestrer plusieurs conteneurs localement (ex. app Flask + base de données).
+- **GitHub Actions** : automatisation CI/CD via un fichier YAML (`ci-cd.yml`).
+
+------
+
+### **3. Projet pratique**
+
+#### **Objectif**
+
+Construire ton microservice Flask, le packager en image Docker, et le pousser automatiquement sur **DockerHub** à chaque merge sur `main`.
+
+------
+
+#### **Exemple de workflow `cd.yml`**
+
+**Note** : dans une vraie chaîne CI/CD, ton **CD (delivery)** ne devrait se lancer **que si la CI passe**.
+Si ils sont indépendants (ici par exemple, `ci.yml` et `cd.yml` ) et qu'on ne met pas de contraintes, alors si les tests échouent, ton image Docker serait quand même construite et poussée.
+
+J'ajoute donc un lien pour dire de pousser l'image docker sur docker que si les tests planifiés dans ci.yml sont réussis.
+
+```yaml
+name: CD - Build & Push Docker Image
+
+on:
+  workflow_run:
+    workflows: ["CI - Hello CI/CD"]   # déclenché après CI
+    types:
+      - completed
+
+jobs:
+  build-and-push:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and Push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-ci-cd:latest
+```
+
+#### **Comment ça marche ?**
+
+- Ton **CI (`ci.yml`)** se lance à chaque `push` ou `pull_request`.
+- Si tout passe ✅, alors le **CD (`cd.yml`)** se déclenche automatiquement.
+- Si les tests échouent ❌, **le CD ne démarre pas**.
+
+C’est exactement le comportement d’un pipeline complet **CI/CD professionnel** :
+
+> *“Don’t deploy broken code.”*
+
+
+
+#### **À faire :**
+
+1. Crée un fichier `.github/workflows/cd.yml` avec ce contenu.
+2. Va sur **DockerHub → Settings → Security → New Access Token**.
+3. Dans ton dépôt GitHub → **Settings → Secrets → Actions**, ajoute :
+   - `DOCKERHUB_USERNAME`
+   - `DOCKERHUB_TOKEN`
+4. À chaque push sur `main`, ton image Flask sera automatiquement construite et publiée sur DockerHub.
+
+------
+
+
+
+### **4. À comprendre en profondeur**
+
+#### **Pourquoi Dockeriser ?**
+
+- Pour **standardiser ton environnement** : ton app tournera partout de la même manière.
+- Pour **simplifier le déploiement** : plus besoin d’installer manuellement Python, Flask, etc.
+- Pour **isoler ton service** du système hôte.
+
+#### **Quand taguer une image ?**
+
+- `:latest` → toujours la version la plus récente.
+- `:v1.0`, `:v1.1`, etc. → versions stables.
+- `:dev` ou `:staging` → pour des environnements spécifiques.
+
+#### **Gérer la version automatiquement**
+
+Tu peux générer un tag dynamique dans ton workflow :
+
+```yaml
+tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-ci-cd:${{ github.run_number }}
+```
+
+Cela crée une version unique à chaque exécution du pipeline (ex. `v23`).
+
+------
+
+
+
+**Status badge** : 
+
+[![CI](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/ci.yml/badge.svg)](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/ci.yml)
+
+[![CD](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/cd.yml/badge.svg)](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/cd.yml)
 
 # RÉFÉRENCES
 
