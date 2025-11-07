@@ -611,7 +611,7 @@ Une assistante IA commente le fichier ci-dessus : [Explications pipeline](./expl
 Voici ce qui se passe concrètement : 
 
 ```mermaid
-graph LR
+graph TB
     A[📝 Commit & Push] --> B[🚀 GitHub Actions démarre]
     B --> C[📥 Clone le repo]
     C --> D[🐍 Installe Python 3.12]
