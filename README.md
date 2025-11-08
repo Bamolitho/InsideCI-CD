@@ -1149,6 +1149,6 @@ Cette méthode est **plus flexible mais demande plus de maintenance**.
 
 # RÉFÉRENCES
 
-[<a id="ref1">1</a>] [PHASE 1](https://github.com/Bamolitho/hello-ci-cd)  
+[<a id="ref1">1</a>] [codes sources -- hello-ci-cd](https://github.com/Bamolitho/hello-ci-cd)  
 
 [<a id="ref2">2</a>] [Texte a afficher_][Lien]
