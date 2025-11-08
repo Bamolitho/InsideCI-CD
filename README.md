@@ -758,25 +758,67 @@ Si ils sont indépendants (ici par exemple, `ci.yml` et `cd.yml` ) et qu'on ne m
 J'ajoute donc un lien pour dire de pousser l'image docker sur docker que si les tests planifiés dans ci.yml sont réussis.
 
 ```yaml
-name: CD - Build & Push Docker Image
+name: CD - Build, Tag & Push Docker Image
 
 on:
   workflow_run:
-    workflows: ["CI - Hello CI/CD"]   # déclenché après CI
-    types:
-      - completed
+    workflows: ["CI - Hello CI/CD"]
+    types: [completed]
+
+permissions:
+  contents: write
 
 jobs:
-  build-and-push:
+  build-tag-push:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # nécessaire pour les tags Git
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Get current version
+        id: get_version
+        run: |
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "Current version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Detect commit type and bump version
+        id: bump_version
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Last commit: $COMMIT_MSG"
+
+          MAJOR=$(echo "${{ steps.get_version.outputs.version }}" | cut -d. -f1 | tr -d 'v')
+          MINOR=$(echo "${{ steps.get_version.outputs.version }}" | cut -d. -f2)
+          PATCH=$(echo "${{ steps.get_version.outputs.version }}" | cut -d. -f3)
+
+          if [[ "$COMMIT_MSG" == *"BREAKING CHANGE"* ]]; then
+            MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          elif [[ "$COMMIT_MSG" == feat:* ]]; then
+            MINOR=$((MINOR + 1)); PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "New version: $NEW_VERSION"
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create and push new Git tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag ${{ steps.bump_version.outputs.new_version }}
+          git push origin ${{ steps.bump_version.outputs.new_version }}
 
       - name: Log in to DockerHub
         uses: docker/login-action@v3
@@ -784,18 +826,33 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and Push Docker image
+      - name: Build & Push Docker image with version tag
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/hello-ci-cd:latest
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/hello-ci-cd:${{ steps.bump_version.outputs.new_version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/hello-ci-cd:latest
 ```
 
-#### **Comment ça marche ?**
+### 💡 Explications pro
 
-- Ton **CI (`ci.yml`)** se lance à chaque `push` ou `pull_request`.
-- Si tout passe ✅, alors le **CD (`cd.yml`)** se déclenche automatiquement.
+Une assistante IA commente le fichier ci-dessus : [Explications pipeline](./explications_pipeline_ci-cd.md)
+
+### **Comment ça fonctionne**
+
+- À chaque exécution réussie de ton workflow CI (à chaque `push` ou `pull_request`), si tout passe ✅, alors le **CD (`cd.yml`)** se déclenche automatiquement. :
+  1. Le script récupère la **dernière version taguée** (`v1.0.0` par ex.).
+  2. Il **lit le message du dernier commit** :
+     - `feat:` → incrémente la version mineure.
+     - `fix:` ou autre → incrémente le patch.
+     - `BREAKING CHANGE` → incrémente la version majeure.
+  3. Il crée un **nouveau tag Git**, le pousse sur le dépôt.
+  4. Il construit et pousse **l’image Docker** avec deux tags :
+     - `:latest`
+     - `:vX.Y.Z` (nouvelle version).
+
 - Si les tests échouent ❌, **le CD ne démarre pas**.
 
 C’est exactement le comportement d’un pipeline complet **CI/CD professionnel** :
@@ -845,11 +902,244 @@ Cela crée une version unique à chaque exécution du pipeline (ex. `v23`).
 
 
 
+# **Phase 4 — Continuous Deployment**
+
+### **1. Objectif**
+
+Ton application Flask doit être **déployée automatiquement** dès que :
+
+- Le pipeline CI (tests, lint, format) réussit,
+- Le build Docker est terminé,
+- Et le tag/version est généré.
+
+Autrement dit, plus besoin d’intervention manuelle : ton app vit toute seule, du code jusqu’à la prod : le code passe en production dès qu’il est prêt.
+
+**Différences avec la Continuous Delivery (phase 3)** :
+
+| Étape            | Continuous Delivery | Continuous Deployment |
+| ---------------- | ------------------- | --------------------- |
+| Tests            | Automatisés         | Automatisés           |
+| Build            | Automatisé          | Automatisé            |
+| Déploiement prod | Manuel              | Automatique           |
+| Risque           | Faible              | Plus élevé            |
+
+L’idée : **“Automate everything, but monitor everything.”**
+
+------
+
+### **2. Concepts clés**
+
+#### **a. Automatisation du déploiement**
+
+- Le déploiement se fait **sans action humaine** après validation des tests.
+- **L’objectif** : que ton code en production soit **toujours à jour** avec la branche `main`.
+
+#### **b. Environnements**
+
+Tu dois prévoir plusieurs environnements :
+
+| Environnement | Usage                                  | Déploiement      |
+| ------------- | -------------------------------------- | ---------------- |
+| `dev`         | Tests locaux, développement            | Manuel           |
+| `staging`     | Pré-production, validation avant prod  | Semi-automatique |
+| `prod`        | Version publique (utilisateurs finaux) | Automatique      |
+
+#### **c. Rollback et monitoring**
+
+Tu dois être capable de :
+
+- **Rollback** → revenir à la version précédente si le déploiement échoue.
+- **Monitorer** → vérifier que ton app est bien déployée et fonctionne (logs, uptime, alertes).
+
+------
+
+### **3. Outils possibles**
+
+#### **Option A : Déploiement sur Render (plus simple)**
+
+✅ Avantages :
+
+- Déploiement continu intégré (pas besoin de VPS)
+- SSL, logs et monitoring intégrés
+- Dockerfile compatible
+
+➡️ Tu connectes ton dépôt GitHub, et Render redéploie automatiquement à chaque `push` sur `main`.
+
+#### **Option B : Déploiement sur VPS (plus pro)**
+
+- Tu utilises **GitHub Actions + SSH** pour pousser ton image et redémarrer le conteneur distant.
+- C’est ce qu’utilisent les vrais pipelines d’entreprise.
+
+**Exemple d’étapes :**
+
+1. Build et push Docker image vers DockerHub.
+2. Connexion SSH au VPS.
+3. Pull de la nouvelle image Docker.
+4. Redémarrage du conteneur avec `docker-compose up -d`.
+
+#### **Option C : Déploiement avancé (Kubernetes, AWS, Azure, GCP)**
+
+- Plus complexe, mais scalable.
+- Gestion d’instances multiples, load balancing, monitoring, et rollback automatique.
+
+------
+
+### **4. Exemple concret — Déploiement sur Render**
+
+#### **Objectif**
+
+Déployer automatiquement ton **image Docker Flask** (déjà poussée sur DockerHub via la Phase 3) sur Render **après chaque CI/CD réussi**.
+
+Modifie ton app.py pour ajouter un message différent : par exemple
+
+`app/app.py` :
+
+```python
+from flask import Flask
+
+app = Flask(__name__)
+
+@app.route("/hello")
+def hello():
+    return {"message": "Hello world from CI/CD! - Phase 4 completed"}
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5801)
+```
+
+Ajoute aussi le même message dans `tests/test_app.py`  pour garantir la réussite des tests.
+
+#### **Workflow GitHub Actions**
+
+Crée un fichier `.github/workflows/deploy-render.yml` :
+
+```
+name: CD - Deploy to Render
+
+on:
+  workflow_run:
+    workflows: ["CD - Build, Tag & Push Docker Image"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Render
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" \
+          -H "Accept: application/json" \
+          -H "Content-Type: application/json"
+          echo "🚀 Déploiement Render déclenché avec succès !"
+
+      - name: Send Telegram Notification
+        if: success()
+        run: |
+          MESSAGE="✅ Déploiement réussi sur Render pour ${{ github.repository }} (tag: latest)"
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          -d text="$MESSAGE"
+
+      - name: Send Telegram Notification (failure)
+        if: failure()
+        run: |
+          MESSAGE="❌ Échec du déploiement sur Render pour ${{ github.repository }} !"
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+          -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          -d text="$MESSAGE"
+```
+
+------
+
+### **5. Secrets nécessaires**
+
+À configurer dans **Settings → Secrets → Actions** :
+
+- `RENDER_DEPLOY_HOOK` → URL de déploiement Render
+   *(tu la trouves dans Render → ton service → Settings → Deploy Hook)*
+- `TELEGRAM_BOT_TOKEN` → token de ton bot Telegram
+- `TELEGRAM_CHAT_ID` → ton identifiant de chat Telegram (obtenu via `@userinfobot`)
+
+------
+
+### **6. Comment ça marche**
+
+1. Ton workflow **CD - Build, Tag & Push Docker Image** (Phase 3) pousse ton image sur DockerHub.
+2. Dès que cette phase réussit ✅, le workflow ci-dessus est déclenché.
+3. Il appelle le **Render Deploy Hook**, qui :
+   - Tire la dernière image Docker `:latest` depuis DockerHub.
+   - Relance automatiquement ton service Flask.
+4. Une notification Telegram t’informe du succès ou de l’échec.
+
+------
+
+### **7. Exemple de dashboard Render**
+
+- **Service** : `hello-ci-cd`
+- **Source** : DockerHub (`bamolitho/hello-ci-cd:latest`)
+- **Auto deploy** : **off** (car géré par GitHub Actions)
+- **Deploy hook** : copié dans `RENDER_DEPLOY_HOOK`
+
+Attends quelques secondes pour vérifier `https://hello-ci-cd-xxxx.onrender.com/hello`
+
+Tu vas voir le message "{"message":"Hello world from CI/CD! - Phase 4 completed"}"
+
+------
+
+### **8. Perspectives — Déploiement sur VPS via SSH**
+
+Si tu veux garder la main sur tout ton environnement :
+
+- Configure un **serveur VPS** (Ubuntu/Debian)
+- Utilise l’action `appleboy/ssh-action@v1.1.0`
+- Script typique :
+  - `docker pull` dernière image
+  - `docker stop && docker rm`
+  - `docker run -d -p 5000:5000 …`
+
+Cette méthode est **plus flexible mais demande plus de maintenance**.
+
+------
+
+### **9. Perspectives d’évolution**
+
+| Fonctionnalité future         | Objectif                                               |
+| ----------------------------- | ------------------------------------------------------ |
+| **Slack Notification**        | Informer ton équipe après chaque déploiement           |
+| **Email Notification**        | Alerter en cas d’échec ou de succès                    |
+| **Kubernetes / Compose**      | Orchestration multi-conteneurs ou scaling automatique  |
+| **Rollback automatique**      | Revenir à la version précédente en cas d’échec         |
+| **Monitoring (Grafana/Prom)** | Suivre la disponibilité et les performances en continu |
+
+------
+
+### **10. À comprendre profondément**
+
+| Thème              | Bonne pratique                                               |
+| ------------------ | ------------------------------------------------------------ |
+| **Quand déployer** | Seulement sur `main` ou sur tag stable                       |
+| **Sécurité**       | Jamais stocker de clés ou mots de passe en clair             |
+| **Rollback**       | Garder la version précédente de l’image Docker               |
+| **Monitoring**     | Vérifier le statut du conteneur (`docker ps`), surveiller les logs, pinger l’app |
+| **Automatisation** | Le but final = “0 clic” après merge                          |
+
+------
+
+
+
 **Status badge** : 
 
 [![CI](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/ci.yml/badge.svg)](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/ci.yml)
 
 [![CD](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/cd.yml/badge.svg)](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/cd.yml)
+
+[![deploy-render](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/deploy-render.yml/badge.svg)](https://github.com/Bamolitho/hello-ci-cd/actions/workflows/deploy-render.yml)
 
 # RÉFÉRENCES
 
