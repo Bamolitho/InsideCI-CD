@@ -1057,6 +1057,12 @@ jobs:
 
 ------
 
+### 💡 Explications pro
+
+Une assistante IA commente le fichier ci-dessus : [Explications pipeline](./explications_pipeline_ci-cd.md)
+
+
+
 ### **5. Secrets nécessaires**
 
 À configurer dans **Settings → Secrets → Actions** :
